@@ -89,9 +89,9 @@ def cds_to_intervals(gtffile, keepexons, transdecoder, aqumode, jgimode, nogenem
 	print >> sys.stderr, "# Counted {} exons for {} transcripts".format(exoncounter, transcounter), time.asctime()
 	return geneintervals, genestrand, genescaffold
 
-def parse_domains(format,inputfile, evaluecutoff, lengthcutoff, programname, outputtype, donamechop, debugmode=False, jgimode=False, geneintervals=None, genestrand=None, genescaffold=None):
+def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype, donamechop, debugmode=False, jgimode=False, geneintervals=None, genestrand=None, genescaffold=None):
 	'''parse domains from hmm domtblout and write to stdout as protein gff or genome gff'''
-	print >> sys.stderr, "# Parsing hmmscan PFAM tabular {}".format(pfamtabular), time.asctime()
+	print >> sys.stderr, "# Parsing hmmscan PFAM tabular {}".format(input), time.asctime()
 	domaincounter = 0
 	protnamedict = {}
 	evalueRemovals = 0
@@ -105,39 +105,40 @@ def parse_domains(format,inputfile, evaluecutoff, lengthcutoff, programname, out
 		if not line or line[0]=="#": # skip comment lines
 			continue # also catch for empty line, which would cause IndexError
 		domaincounter += 1
-		lsplits = line.split()
-#                                                                            --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
-#      0                 1         2     3                    4         5        6       7     8     9  10   11       12        13     14    15     16   17     18   19     20  21  22
-# target name        accession   tlen query name           accession   qlen   E-value  score  bias   #  of  c-Evalue  i-Evalue  score  bias  from    to  from    to  from    to  acc description of target
+
+#																		    --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
+#      0				 1		 2     3				    4		 5		6       7     8     9  10   11       12		13     14    15     16   17     18   19     20  21  22
+# target name		accession   tlen query name		   accession   qlen   E-value  score  bias   #  of  c-Evalue  i-Evalue  score  bias  from    to  from    to  from    to  acc description of target
 #------------------- ---------- ----- -------------------- ---------- ----- --------- ------ ----- --- --- --------- --------- ------ ----- ----- ----- ----- ----- ----- ----- ---- ---------------------
-        if outputtype=="PFAM":
-            targetname = lsplits[0]
-    		pfamacc = lsplits[1].rsplit('.',1)[0] # accs as PF00530.13, so chop off .13
-    		#queryid = lsplits[3].rsplit('|',1)[0] # chop transcript from transdecoder peptide
-    		queryid = lsplits[3] # for transdecoder peptides, |m.123 is needed for interval identification
-    		if donamechop:
-    			queryid = queryid.rsplit(donamechop,1)[0]
-    		protnamedict[queryid] = True
-    		evalue = float(lsplits[11]) # or [6] for full seq or [12]
-    		domscore = lsplits[13]
-    		domstart = int(lsplits[17])
-    		domend = int(lsplits[18])
-    		domnumber = lsplits[9]
-    		domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
-    		fractioncov = domainlength/float(lsplits[2])
-        else: #protein gff coordinates
-
-    		proteinid = lsplits[0]
-    		if donamechop:
-    			queryid = queryid.rsplit(donamechop,1)[0]
-    		protnamedict[queryid] = True
-    		domscore = lsplits[5]
-    		domstart = int(lsplits[3])
-    		domend = int(lsplits[4])
-    		targetname = lsplits[8]
-    		domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
-    		fractioncov = domainlength/float(lsplits[2])
-
+		if outputtype=="PFAM":
+			lsplits = line.split()
+			targetname = lsplits[0]
+			pfamacc = lsplits[1].rsplit('.',1)[0] # accs as PF00530.13, so chop off .13
+			#queryid = lsplits[3].rsplit('|',1)[0] # chop transcript from transdecoder peptide
+			queryid = lsplits[3] # for transdecoder peptides, |m.123 is needed for interval identification
+			if donamechop:
+				queryid = queryid.rsplit(donamechop,1)[0]
+			protnamedict[queryid] = True
+			evalue = float(lsplits[11]) # or [6] for full seq or [12]
+			domscore = lsplits[13]
+			domstart = int(lsplits[17])
+			domend = int(lsplits[18])
+			domnumber = lsplits[9]
+			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
+			fractioncov = domainlength/float(lsplits[2])
+		else: #protein gff coordinates
+			lsplits = line.split("\t")
+			queryid = lsplits[0]
+			if donamechop:
+				queryid = queryid.rsplit(donamechop,1)[0]
+			protnamedict[queryid] = True
+			domscore = lsplits[5]
+			domstart = int(lsplits[3])
+			domend = int(lsplits[4])
+			targetname = lsplits[7]
+			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
+			fractioncov = 1 #todo, get transcript length from geneintervals
+			evalue = 0 #todo,implement cutoff for score
 		if fractioncov < lengthcutoff: # skip domains that are too short
 			shortRemovals += 1
 			continue
@@ -167,10 +168,10 @@ def parse_domains(format,inputfile, evaluecutoff, lengthcutoff, programname, out
 				continue
 			for interval in genomeintervals:
 				# thus ID appears as protein.targetname.number, so avic1234.G2F.1, and uses ID in most browsers
-                if outputtype=="PFAM":
-                    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={10}.{8}.{9};Name={7}.{8}.{9}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, pfamacc, targetname, domnumber, queryid)
-                else:
-                    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\t{7};query={8}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, targetname, proteinid)
+				if outputtype=="PFAM":
+				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={10}.{8}.{9};Name={7}.{8}.{9}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, pfamacc, targetname, domnumber, queryid)
+				else:
+				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\t{7};query={8}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, targetname, queryid)
 		else: # for protein GFF, make outline for later sorting
 			boundaries = (domstart,domend)
 			if debugmode:
@@ -253,7 +254,7 @@ def main(argv, wayout):
 	if not len(argv):
 		argv.append("-h")
 	parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=__doc__)
-	parser.add_argument('-i','--input', help="PFAM domain information as hmmscan tabular")
+	parser.add_argument('-i','--input', help="PFAM domain information as hmmscan tabularg or protein base gff")
 	parser.add_argument('-A','--aqu', action="store_true", help="use presets for Aqu2")
 	parser.add_argument('-d','--delimiter', help="optional delimiter for protein names, cuts off end split")
 	parser.add_argument('-e','--evalue', type=float, default=1e-1, help="evalue cutoff for domain filtering [1e-1]")
