@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 #
-# pfam2gff.py v1.0 created 2016-03-03
+# convert2gff.py v1.0 created 2017-01-30 forked from pfam2gff
 #
-# Sequence Ontology terms from:
-# https://github.com/The-Sequence-Ontology/SO-Ontologies/blob/master/subsets/SOFA.obo
+
 
 '''
-pfam2gff.py  last modified 2016-04-21
+convert2gff.py  last modified 2016-04-21
 
     EXAMPLE USAGE:
     to convert to protein gff, where domains are protein coordinates
@@ -91,7 +90,7 @@ def cds_to_intervals(gtffile, keepexons, transdecoder, aqumode, jgimode, nogenem
 
 def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype, donamechop, debugmode=False, jgimode=False, geneintervals=None, genestrand=None, genescaffold=None):
 	'''parse domains from hmm domtblout and write to stdout as protein gff or genome gff'''
-	print >> sys.stderr, "# Parsing hmmscan PFAM tabular {}".format(input), time.asctime()
+	print >> sys.stderr, "# Parsing  {}".format(input), time.asctime()
 	domaincounter = 0
 	protnamedict = {}
 	evalueRemovals = 0
@@ -126,7 +125,21 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			domnumber = lsplits[9]
 			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
 			fractioncov = domainlength/float(lsplits[2])
-		else: #protein gff coordinates
+		elif programname=="tmhmm":
+			lsplits = line.split("\t")
+			if lsplits[4]=='PredHel=0':
+			  continue
+			queryid = lsplits[0]
+			if donamechop:
+			  queryid = queryid.rsplit(donamechop,1)[0]
+			protnamedict[queryid] = True
+			domscore = lsplits[2].rsplit('=',1)[1]
+			domstart = int(re.findall('\d+',lsplits[5])[0])
+			domend = int(re.findall('\d+',lsplits[5])[-1])
+			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
+			fractioncov = 1 #todo, get transcript length from geneintervals
+			evalue = 0 #todo,implement cutoff for score
+		else: #protein coordinates gff
 			lsplits = line.split("\t")
 			queryid = lsplits[0]
 			if donamechop:
@@ -135,7 +148,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			domscore = lsplits[5]
 			domstart = int(lsplits[3])
 			domend = int(lsplits[4])
-			targetname = lsplits[7]
+			#targetname = lsplits[8]
 			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
 			fractioncov = 1 #todo, get transcript length from geneintervals
 			evalue = 0 #todo,implement cutoff for score
@@ -169,9 +182,9 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			for interval in genomeintervals:
 				# thus ID appears as protein.targetname.number, so avic1234.G2F.1, and uses ID in most browsers
 				if outputtype=="PFAM":
-				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={10}.{8}.{9};Name={7}.{8}.{9}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, pfamacc, targetname, domnumber, queryid)
+				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={10}.{8}.{9};Name={7}.{8}.{9};subject={10}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, pfamacc, targetname, domnumber, queryid)
 				else:
-				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\t{7};query={8}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, targetname, queryid)
+				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={7}.{2};query={7}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, queryid)
 		else: # for protein GFF, make outline for later sorting
 			boundaries = (domstart,domend)
 			if debugmode:
