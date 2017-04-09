@@ -88,7 +88,7 @@ def cds_to_intervals(gtffile, keepexons, transdecoder, aqumode, jgimode, nogenem
 	print >> sys.stderr, "# Counted {} exons for {} transcripts".format(exoncounter, transcounter), time.asctime()
 	return geneintervals, genestrand, genescaffold
 
-def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype, donamechop, debugmode=False, jgimode=False, geneintervals=None, genestrand=None, genescaffold=None):
+def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype, donamechop, swissprot, debugmode=False, jgimode=False, geneintervals=None, genestrand=None, genescaffold=None):
 	'''parse domains from hmm domtblout and write to stdout as protein gff or genome gff'''
 	print >> sys.stderr, "# Parsing  {}".format(input), time.asctime()
 	domaincounter = 0
@@ -104,11 +104,39 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 		if not line or line[0]=="#": # skip comment lines
 			continue # also catch for empty line, which would cause IndexError
 		domaincounter += 1
+		backframe = False
 
 #																		    --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
 #      0				 1		 2     3				    4		 5		6       7     8     9  10   11       12		13     14    15     16   17     18   19     20  21  22
 # target name		accession   tlen query name		   accession   qlen   E-value  score  bias   #  of  c-Evalue  i-Evalue  score  bias  from    to  from    to  from    to  acc description of target
 #------------------- ---------- ----- -------------------- ---------- ----- --------- ------ ----- --- --- --------- --------- ------ ----- ----- ----- ----- ----- ----- ----- ---- ---------------------
+		if programname=="blastp":
+			lsplits = line.split()
+			#qseqid, sseqid, pident, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore
+			sseqid = lsplits[1]
+			# do all removals before any real counting
+			evalue = float(lsplits[10])
+			bitscore = float(lsplits[11])
+			alignlength = float(lsplits[3])
+			domstart = int(lsplits[6])
+			domend = int(lsplits[7])
+			domainlength = abs(domend - domstart) + 1 # bases 1 to 6 should have length 6
+			fractioncov = 1 #todo  alignlength/seqlengthdict[sseqid]
+
+    		# then count queries
+			qseqid = lsplits[0]
+			if donamechop: # for transdecoder peptides, |m.123 is needed for interval identification
+				qseqid = qseqid.rsplit(donamechop,1)[0]
+			protnamedict[qseqid] = True
+			if swissprot:
+    		# blast outputs swissprot proteins as: sp|P0DI82|TPC2B_HUMAN
+				sseqid = sseqid.split("|")[2] # should change to TPC2B_HUMAN
+			else:
+				sseqid = sseqid.replace("|","")
+			if domstart > domend: # for cases where transcript has backwards hit
+				domstart, domend = domend, domstart # invert positions for calculation
+				backframe = True # also change the strand
+				backframecounts += 1
 		if outputtype=="PFAM":
 			lsplits = line.split()
 			targetname = lsplits[0]
@@ -167,6 +195,8 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			scaffold = genescaffold.get(queryid, None)
 			strand = genestrand.get(queryid, None)
 			# convert transcript nucleotide to genomic nucleotide, and split at exon bounds
+			if backframe: # reassign strand if match is backwards
+				strand = "+" if strand=="-" else "-"
 			if strand=='+':
 				genomeintervals = get_intervals(geneintervals[queryid], domstart, domainlength, doreverse=False)
 			elif strand=='-': # implies '-'
@@ -176,7 +206,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 				continue
 			intervalcounts += len(genomeintervals)
 			if not len(genomeintervals):
-				print >> sys.stderr, "WARNING: no intervals for {} in {}".format(targetname, queryid)
+				print >> sys.stderr, "WARNING: no intervals for {} in protein gff".format(queryid)
 				intervalproblems += 1
 				continue
 			for interval in genomeintervals:
@@ -277,7 +307,8 @@ def main(argv, wayout):
 	parser.add_argument('-n','--no-genes', action="store_true", help="genes are not defined, get gene ID for each exon")
 	parser.add_argument('-p','--program', help="program for 2nd column in output [hmmscan]", default="hmmscan")
 	parser.add_argument('-t','--type', help="gff type [PFAM]", default="PFAM")
-	# this could more properly be SO:0000349 protein_match
+	parser.add_argument('-S','--swissprot', action="store_true", help="db sequences have swissprot headers")
+    # this could more properly be SO:0000349 protein_match
 	parser.add_argument('-T','--transdecoder', action="store_true", help="use presets for TransDecoder genome gff")
 	parser.add_argument('-x','--exons', action="store_true", help="exons define coding sequence")
 	parser.add_argument('--debug', action="store_true", help="debug some output options")
@@ -285,7 +316,7 @@ def main(argv, wayout):
 
 	if args.genes:
 		geneintervals, genestrand, genescaffold = cds_to_intervals(args.genes, args.exons, args.transdecoder, args.aqu, args.JGI, args.no_genes)
-		parse_domains(args.input, args.evalue, args.length_cutoff, args.program, args.type, args.delimiter, args.debug, args.JGI, geneintervals, genestrand, genescaffold)
+		parse_domains(args.input, args.evalue, args.length_cutoff, args.program, args.type, args.delimiter, args.swissprot, args.debug, args.JGI, geneintervals, genestrand, genescaffold)
 	else: # assume protein gff
 		parse_domains(args.input, args.evalue, args.length_cutoff, args.program, args.type, args.delimiter, args.debug)
 
