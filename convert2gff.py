@@ -158,6 +158,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			if lsplits[4]=='PredHel=0':
 			  continue
 			queryid = lsplits[0]
+			sseqid=lsplits[5].rsplit('=',1)[1]
 			if donamechop:
 			  queryid = queryid.rsplit(donamechop,1)[0]
 			protnamedict[queryid] = True
@@ -176,7 +177,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 			domscore = lsplits[5]
 			domstart = int(lsplits[3])
 			domend = int(lsplits[4])
-			#targetname = lsplits[8]
+			sseqid = 'signalpep'
 			domainlength = domend - domstart + 1 # bases 1 to 6 should have length 6
 			fractioncov = 1 #todo, get transcript length from geneintervals
 			evalue = 0 #todo,implement cutoff for score
@@ -214,7 +215,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 				if outputtype=="PFAM":
 				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={10}.{8}.{9};Name={7}.{8}.{9};subject={10}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, pfamacc, targetname, domnumber, queryid)
 				else:
-				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={7}.{2};query={7}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, queryid)
+				    print >> sys.stdout, "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t.\tID={7}.{2};query={7};Name={8}".format(scaffold, programname, outputtype, interval[0], interval[1], domscore, strand, queryid,sseqid)
 		else: # for protein GFF, make outline for later sorting
 			boundaries = (domstart,domend)
 			if debugmode:
