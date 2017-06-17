@@ -113,10 +113,11 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 		if programname=="blastp":
 			lsplits = line.split()
 			#qseqid, sseqid, pident, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore
+			queryid = lsplits[0]
 			sseqid = lsplits[1]
 			# do all removals before any real counting
 			evalue = float(lsplits[10])
-			bitscore = float(lsplits[11])
+			domscore = float(lsplits[11])
 			alignlength = float(lsplits[3])
 			domstart = int(lsplits[6])
 			domend = int(lsplits[7])
@@ -137,7 +138,7 @@ def parse_domains(inputfile, evaluecutoff, lengthcutoff, programname, outputtype
 				domstart, domend = domend, domstart # invert positions for calculation
 				backframe = True # also change the strand
 				backframecounts += 1
-		if outputtype=="PFAM":
+		elif outputtype=="PFAM":
 			lsplits = line.split()
 			targetname = lsplits[0]
 			pfamacc = lsplits[1].rsplit('.',1)[0] # accs as PF00530.13, so chop off .13
